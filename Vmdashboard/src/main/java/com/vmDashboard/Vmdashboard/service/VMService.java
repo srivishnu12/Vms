@@ -8,8 +8,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
 
 @Service
@@ -17,7 +20,6 @@ public class VMService {
 
     private static final Logger logger = LoggerFactory.getLogger(VMService.class);
 
-    // Ensure that VBoxManage path is correctly set with backslashes and spaces handled
     @Value("${vbox.manage.path:C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe}")
     private String vboxManagePath;
 
@@ -40,19 +42,24 @@ public class VMService {
         try {
             validateVMParams(vm);
 
-            // VBoxManage createvm command with quoted VM name to handle spaces
+            // Validate VBoxManage path
+            if (!isVBoxManageValid()) {
+                throw new RuntimeException("VBoxManage executable not found at path: " + vboxManagePath);
+            }
+
+            // Create VM command
             String createCommand = String.format(
                     "\"%s\" createvm --name \"%s\" --ostype %s --register",
                     vboxManagePath, vm.getName(), vm.getOsType());
             executeCommand(createCommand);
 
-            // VBoxManage modifyvm command
+            // Modify VM command
             String modifyCommand = String.format(
                     "\"%s\" modifyvm \"%s\" --cpus %d --memory %d",
                     vboxManagePath, vm.getName(), vm.getCpu(), vm.getRam());
             executeCommand(modifyCommand);
 
-            // VBoxManage createhd command
+            // Create disk command
             String storageCommand = String.format(
                     "\"%s\" createhd --filename \"%s.vdi\" --size %d",
                     vboxManagePath, vm.getName(), vm.getStorage());
@@ -128,17 +135,13 @@ public class VMService {
         }
     }
 
-    // Helper method to execute commands
+    // Execute command with ProcessBuilder
     private void executeCommand(String command) {
         logger.info("Executing command: {}", command);
         try {
-            // Check if VBoxManage exists at the given path
-            if (!isVBoxManageValid()) {
-                logger.error("Invalid VBoxManage path: {}", vboxManagePath);
-                throw new RuntimeException("VBoxManage executable not found at path: " + vboxManagePath);
-            }
-
-            Process process = Runtime.getRuntime().exec(command);
+            ProcessBuilder processBuilder = new ProcessBuilder("cmd.exe", "/c", command);
+            processBuilder.redirectErrorStream(true);
+            Process process = processBuilder.start();
             captureOutput(process);
             int exitCode = process.waitFor();
             if (exitCode != 0) {
@@ -151,19 +154,19 @@ public class VMService {
         }
     }
 
-    // Helper method to capture standard output and error streams
+    // Capture output from process
     private void captureOutput(Process process) throws IOException {
-        try (BufferedReader stdInput = new BufferedReader(new InputStreamReader(process.getInputStream()));
-             BufferedReader stdError = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
-            while ((line = stdInput.readLine()) != null) {
-                logger.info("OUTPUT: {}", line);
-            }
-            while ((line = stdError.readLine()) != null) {
-                logger.error("ERROR: {}", line);
+            while ((line = reader.readLine()) != null) {
+                logger.info(line);
             }
         }
+    }
+
+    // Validate VBoxManage path by checking if the file exists
+    private boolean isVBoxManageValid() {
+        return Files.exists(Paths.get(vboxManagePath));
     }
 
     // Validate VM parameters
@@ -182,19 +185,6 @@ public class VMService {
         }
         if (vm.getStorage() <= 0) {
             throw new IllegalArgumentException("VM must have storage allocated");
-        }
-    }
-
-    // Check if VBoxManage exists at the given path
-    private boolean isVBoxManageValid() {
-        ProcessBuilder processBuilder = new ProcessBuilder("cmd.exe", "/c", "where", "VBoxManage");
-        try {
-            Process process = processBuilder.start();
-            int exitCode = process.waitFor();
-            return exitCode == 0;
-        } catch (IOException | InterruptedException e) {
-            logger.error("Error checking VBoxManage path", e);
-            return false;
         }
     }
 }
