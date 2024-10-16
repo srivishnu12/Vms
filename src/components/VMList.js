@@ -17,7 +17,7 @@ const VMList = () => {
   };
 
   const startVM = (id) => {
-    axios.post(`http://localhost:8080/vms/${id}/start`)
+    axios.put(`http://localhost:8080/vms/${id}/start`)
       .then(() => {
         // Update the local state without fetching all VMs again
         setVms(vms.map(vm => (vm.id === id ? { ...vm, status: 'Running' } : vm)));
@@ -26,7 +26,7 @@ const VMList = () => {
   };
 
   const stopVM = (id) => {
-    axios.post(`http://localhost:8080/vms/${id}/stop`)
+    axios.put(`http://localhost:8080/vms/${id}/stop`)
       .then(() => {
         // Update the local state without fetching all VMs again
         setVms(vms.map(vm => (vm.id === id ? { ...vm, status: 'Stopped' } : vm)));
@@ -35,7 +35,7 @@ const VMList = () => {
   };
 
   const deleteVM = (id) => {
-    axios.post(`http://localhost:8080/vms/${id}/delete`)
+    axios.delete(`http://localhost:8080/vms/${id}/delete`)
       .then(() => {
         // Remove the deleted VM from the list
         setVms(vms.filter(vm => vm.id !== id));
